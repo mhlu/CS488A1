@@ -21,8 +21,10 @@ A1::A1()
     m_grid( DIM ),
     m_active_x( 0 ),
     m_active_z( 0 ),
-    m_size( 1 ),
-    m_rotation( 0 )
+
+    m_scale( 1 ),
+    m_rotating( false ),
+    m_rot_angle( 0 )
 {
     colour[0] = 0.0f;
     colour[1] = 0.0f;
@@ -280,7 +282,11 @@ void A1::guiLogic()
 void A1::draw()
 {
     // Create a global transformation for the model (centre it).
+    vec3 y_axis(0.0f, 1.0f, 0.0f);
+
     mat4 W;
+    W = glm::rotate( W, m_rot_angle, y_axis );
+    W = glm::scale( W, vec3(m_scale) );
     W = glm::translate( W, vec3( -float(DIM)/2.0f, 0, -float(DIM)/2.0f ) );
 
     m_shader.enable();
@@ -288,12 +294,11 @@ void A1::draw()
     {
         glEnable( GL_DEPTH_TEST );
 
-        mat4 global_trans = W;
-        global_trans *= glm::scale(mat4(), vec3(m_size));
+
 
         glUniformMatrix4fv( P_uni, 1, GL_FALSE, value_ptr( proj ) );
         glUniformMatrix4fv( V_uni, 1, GL_FALSE, value_ptr( view ) );
-        glUniformMatrix4fv( M_uni, 1, GL_FALSE, value_ptr( global_trans ) );
+        glUniformMatrix4fv( M_uni, 1, GL_FALSE, value_ptr( W ) );
 
         // draw the grid
         glBindVertexArray( m_grid_vao );
@@ -305,29 +310,42 @@ void A1::draw()
 
 
 
+        // draw cubes by repeatly drawing a unit cube
+        // transformed into desired position
         glBindVertexArray( m_cube_vao );
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         for ( int x = 0; x < DIM; x++ ) {
             for ( int z = 0; z < DIM; z++ ) {
                 int h = m_grid.getHeight( x, z );
                 for ( int y = 0; y < h; y++ ) {
 
-                    mat4 Trans;
-                    Trans = glm::translate( W, vec3( x, y, z ) );
+                    mat4 Trans = W;
+                    // honestly, maybe I should undo the global translation,
+                    // perform this translation, then redo the global translation
+                    // but since translations are communative, I'll just do this
+                    Trans = glm::translate( Trans, vec3( x, y, z ) );
                     glUniformMatrix4fv( M_uni, 1, GL_FALSE, value_ptr( Trans ) );
                     glUniform3f( col_uni, 1, 1, 1 );
                     glDrawElements( GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
 
                 }
 
+                if ( x == m_active_x && z == m_active_z ) {
+                    int y = h;
+
+                    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                    glDisable( GL_DEPTH_TEST );
+
+                    mat4 Trans = W;
+                    Trans = glm::translate( Trans, vec3( x, y, z ) );
+                    glUniformMatrix4fv( M_uni, 1, GL_FALSE, value_ptr( Trans ) );
+                    glUniform3f( col_uni, 1, 1, 1 );
+                    glDrawElements( GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+
+                    glEnable( GL_DEPTH_TEST );
+                    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+                }
             }
         }
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-        //mat4 Trans;
-        //Trans = glm::translate( W, vec3( 1, 0, 1 ) );
-        //glUniformMatrix4fv( M_uni, 1, GL_FALSE, value_ptr( Trans ) );
-        //glDrawArrays( GL_TRIANGLES, 0, 3 );
 
         glBindVertexArray( 0 );
         CHECK_GL_ERRORS;
@@ -375,6 +393,13 @@ bool A1::mouseMoveEvent(double xPos, double yPos)
         // Probably need some instance variables to track the current
         // rotation amount, and maybe the previous X position (so
         // that you can rotate relative to the *change* in X.
+
+        if ( m_rotating ) {
+            m_rot_angle += ( xPos - m_mouse_x ) / 100.0f;
+        }
+
+        m_mouse_x = xPos;
+        m_mouse_y = yPos;
     }
 
     return eventHandled;
@@ -390,6 +415,16 @@ bool A1::mouseButtonInputEvent(int button, int actions, int mods) {
     if (!ImGui::IsMouseHoveringAnyWindow()) {
         // The user clicked in the window.  If it's the left
         // mouse button, initiate a rotation.
+
+        if ( button == GLFW_MOUSE_BUTTON_LEFT && actions == GLFW_PRESS ) {
+            m_rotating = true;
+            m_rot_init_x = m_mouse_x;
+        }
+
+        if ( button == GLFW_MOUSE_BUTTON_LEFT && actions == GLFW_RELEASE ) {
+            m_rotating = false;
+        }
+
     }
 
     return eventHandled;
@@ -403,10 +438,10 @@ bool A1::mouseScrollEvent(double xOffSet, double yOffSet) {
     bool eventHandled(false);
 
     // Zoom in or out.
-    m_size = m_size + yOffSet * 0.5f;
-    m_size = m_size + xOffSet * 0.5f;
+    m_scale = m_scale + yOffSet * 0.5f;
+    m_scale = m_scale + xOffSet * 0.5f;
 
-    m_size = glm::clamp(m_size, 0.0f, 10.0f);
+    m_scale = glm::clamp(m_scale, 0.2f, 5.0f);
 
     return eventHandled;
 }

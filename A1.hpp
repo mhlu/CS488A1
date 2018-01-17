@@ -52,9 +52,16 @@ private:
     glm::mat4 view;
 
     // rotation angle in radians
-    float m_rotation;
+    bool m_rotating;
+    float m_rot_angle;
+    double m_rot_init_x;
+
     // size
-    float m_size;
+    float m_scale;
+
+    // current mouse pos
+    double m_mouse_x;
+    double m_mouse_y;
 
     // grid control
     Grid m_grid;
