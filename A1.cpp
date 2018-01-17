@@ -14,16 +14,15 @@ using namespace std;
 static const size_t DIM = 16;
 static const size_t MAX_HEIGHT = 20;
 
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-
 //----------------------------------------------------------------------------------------
 // Constructor
 A1::A1()
     : current_col( 0 ),
     m_grid( DIM ),
     m_active_x( 0 ),
-    m_active_z( 0 )
+    m_active_z( 0 ),
+    m_size( 1 ),
+    m_rotation( 0 )
 {
     colour[0] = 0.0f;
     colour[1] = 0.0f;
@@ -289,9 +288,12 @@ void A1::draw()
     {
         glEnable( GL_DEPTH_TEST );
 
+        mat4 global_trans = W;
+        global_trans *= glm::scale(mat4(), vec3(m_size));
+
         glUniformMatrix4fv( P_uni, 1, GL_FALSE, value_ptr( proj ) );
         glUniformMatrix4fv( V_uni, 1, GL_FALSE, value_ptr( view ) );
-        glUniformMatrix4fv( M_uni, 1, GL_FALSE, value_ptr( W ) );
+        glUniformMatrix4fv( M_uni, 1, GL_FALSE, value_ptr( global_trans ) );
 
         // draw the grid
         glBindVertexArray( m_grid_vao );
@@ -401,6 +403,10 @@ bool A1::mouseScrollEvent(double xOffSet, double yOffSet) {
     bool eventHandled(false);
 
     // Zoom in or out.
+    m_size = m_size + yOffSet * 0.5f;
+    m_size = m_size + xOffSet * 0.5f;
+
+    m_size = glm::clamp(m_size, 0.0f, 10.0f);
 
     return eventHandled;
 }
@@ -439,7 +445,7 @@ bool A1::keyInputEvent(int key, int action, int mods) {
 
         if ( key == GLFW_KEY_BACKSPACE ) {
             int h = m_grid.getHeight( m_active_x, m_active_z );
-            h = MAX( h-1, 0 );
+            h = glm::clamp( h-1, 0, (int)MAX_HEIGHT );
             m_grid.setHeight( m_active_x, m_active_z, h );
 
             eventHandled = true;
@@ -447,29 +453,29 @@ bool A1::keyInputEvent(int key, int action, int mods) {
 
         if ( key == GLFW_KEY_SPACE ) {
             int h = m_grid.getHeight( m_active_x, m_active_z );
-            h = MIN( h+1, MAX_HEIGHT );
+            h = glm::clamp( h+1, 0, (int)MAX_HEIGHT );
             m_grid.setHeight( m_active_x, m_active_z, h );
 
             eventHandled = true;
         }
 
         if ( key == GLFW_KEY_UP ) {
-            m_active_z = MAX( m_active_z-1, 0 );
+            m_active_z = glm::clamp( m_active_z-1, 0, (int)(DIM-1) );
             eventHandled = true;
         }
 
         if ( key == GLFW_KEY_DOWN ) {
-            m_active_z = MIN( m_active_z+1, DIM-1 );
+            m_active_z = glm::clamp( m_active_z+1, 0, (int)(DIM-1) );
             eventHandled = true;
         }
 
         if ( key == GLFW_KEY_LEFT ) {
-            m_active_x = MAX( m_active_x-1, 0 );
+            m_active_x = glm::clamp( m_active_x-1, 0, (int)(DIM-1) );
             eventHandled = true;
         }
 
         if ( key == GLFW_KEY_RIGHT ) {
-            m_active_x = MIN( m_active_x+1, DIM-1 );
+            m_active_x = glm::clamp( m_active_x+1, 0, (int)(DIM-1) );
             eventHandled = true;
         }
     }
