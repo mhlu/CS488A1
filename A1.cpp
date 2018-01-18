@@ -13,28 +13,26 @@ using namespace std;
 
 static const size_t DIM = 16;
 static const size_t MAX_HEIGHT = 20;
+static const size_t NUM_COLOUR = 8;
 
 //----------------------------------------------------------------------------------------
 // Constructor
 A1::A1()
     : current_col( 0 ),
     m_grid( DIM ),
-    m_active_x( 0 ),
-    m_active_z( 0 ),
+    m_rotating( false )
 
-    m_scale( 1 ),
-    m_rotating( false ),
-    m_rot_angle( 0 )
 {
-    colour[0] = 0.0f;
-    colour[1] = 0.0f;
-    colour[2] = 0.0f;
+    colour = new float[ NUM_COLOUR * 3 ];
+    reset();
 }
 
 //----------------------------------------------------------------------------------------
 // Destructor
 A1::~A1()
-{}
+{
+    delete []colour;
+}
 
 //----------------------------------------------------------------------------------------
 /*
@@ -130,16 +128,22 @@ void A1::initGrid()
 
     /*
      *
-     *
      *    *------ x
      *    |
      *    |
      *    |
      *    z
      *
+     *
+     *  Inner square below is when y = 0
+     *  Outer square belowis when y = 1
+     *
      *    4            5
+     *
      *       0     1
+     *
      *       3     2
+     *
      *    7            6
      */
 
@@ -239,6 +243,10 @@ void A1::guiLogic()
             glfwSetWindowShouldClose(m_window, GL_TRUE);
         }
 
+        if( ImGui::Button( "Reset Controls" ) ) {
+            reset();
+        }
+
         // Eventually you'll create multiple colour widgets with
         // radio buttons.  If you use PushID/PopID to give them all
         // unique IDs, then ImGui will be able to keep them separate.
@@ -248,13 +256,16 @@ void A1::guiLogic()
         // Prefixing a widget name with "##" keeps it from being
         // displayed.
 
-        ImGui::PushID( 0 );
-        ImGui::ColorEdit3( "##Colour", colour );
-        ImGui::SameLine();
-        if( ImGui::RadioButton( "##Col", &current_col, 0 ) ) {
-            // Select this colour.
+        for ( int i = 0; i < NUM_COLOUR; i++ ) {
+            ImGui::PushID( i );
+            ImGui::ColorEdit3( "##Colour", (colour+i*3) );
+            ImGui::SameLine();
+            if( ImGui::RadioButton( "##Col", &current_col, i ) ) {
+                // Select this colour.
+                m_grid.setColour( m_active_x, m_active_z, current_col );
+            }
+            ImGui::PopID();
         }
-        ImGui::PopID();
 
 /*
         // For convenience, you can uncomment this to show ImGui's massive
@@ -315,7 +326,13 @@ void A1::draw()
         glBindVertexArray( m_cube_vao );
         for ( int x = 0; x < DIM; x++ ) {
             for ( int z = 0; z < DIM; z++ ) {
+
+                if ( x == m_active_x && z == m_active_z ) {
+                    continue;
+                }
+
                 int h = m_grid.getHeight( x, z );
+                int c = m_grid.getColour( x, z );
                 for ( int y = 0; y < h; y++ ) {
 
                     mat4 Trans = W;
@@ -324,28 +341,51 @@ void A1::draw()
                     // but since translations are communative, I'll just do this
                     Trans = glm::translate( Trans, vec3( x, y, z ) );
                     glUniformMatrix4fv( M_uni, 1, GL_FALSE, value_ptr( Trans ) );
-                    glUniform3f( col_uni, 1, 1, 1 );
+
+                    float r = colour[ 3*c ];
+                    float g = colour[ 3*c + 1 ];
+                    float b = colour[ 3*c + 2 ];
+                    glUniform3f( col_uni, r, g, b );
                     glDrawElements( GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
 
                 }
 
-                if ( x == m_active_x && z == m_active_z ) {
-                    int y = h;
-
-                    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                    glDisable( GL_DEPTH_TEST );
-
-                    mat4 Trans = W;
-                    Trans = glm::translate( Trans, vec3( x, y, z ) );
-                    glUniformMatrix4fv( M_uni, 1, GL_FALSE, value_ptr( Trans ) );
-                    glUniform3f( col_uni, 1, 1, 1 );
-                    glDrawElements( GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
-                    glEnable( GL_DEPTH_TEST );
-                    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-                }
             }
         }
+
+        {
+            // outline active column in green, add skeleton of EXTRA cube on top
+            // this draw an EXTRA SKELETON CUBE
+            glDisable( GL_DEPTH_TEST );
+            int h = m_grid.getHeight( m_active_x, m_active_z );
+            int c = m_grid.getColour( m_active_x, m_active_z );
+            float r = colour[ 3*c ];
+            float g = colour[ 3*c + 1 ];
+            float b = colour[ 3*c + 2 ];
+            for ( int y = 0; y < h+1; y++ ) {
+
+                mat4 Trans = W;
+                // honestly, maybe I should undo the global translation,
+                // perform this translation, then redo the global translation
+                // but since translations are communative, I'll just do this
+                Trans = glm::translate( Trans, vec3( m_active_x, y, m_active_z ) );
+                glUniformMatrix4fv( M_uni, 1, GL_FALSE, value_ptr( Trans ) );
+
+
+                if ( y < h ) {
+                    glUniform3f( col_uni, r, g, b );
+                    glDrawElements( GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+                }
+
+                glUniform3f( col_uni, 0, 0, 0 );
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                glDrawElements( GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            }
+            glEnable( GL_DEPTH_TEST );
+        }
+
+
 
         glBindVertexArray( 0 );
         CHECK_GL_ERRORS;
@@ -400,6 +440,8 @@ bool A1::mouseMoveEvent(double xPos, double yPos)
 
         m_mouse_x = xPos;
         m_mouse_y = yPos;
+
+        eventHandled = true;
     }
 
     return eventHandled;
@@ -419,10 +461,11 @@ bool A1::mouseButtonInputEvent(int button, int actions, int mods) {
         if ( button == GLFW_MOUSE_BUTTON_LEFT && actions == GLFW_PRESS ) {
             m_rotating = true;
             m_rot_init_x = m_mouse_x;
-        }
+            eventHandled = true;
 
-        if ( button == GLFW_MOUSE_BUTTON_LEFT && actions == GLFW_RELEASE ) {
+        } else if ( button == GLFW_MOUSE_BUTTON_LEFT && actions == GLFW_RELEASE ) {
             m_rotating = false;
+            eventHandled = true;
         }
 
     }
@@ -442,6 +485,8 @@ bool A1::mouseScrollEvent(double xOffSet, double yOffSet) {
     m_scale = m_scale + xOffSet * 0.5f;
 
     m_scale = glm::clamp(m_scale, 0.2f, 5.0f);
+
+    eventHandled = true;
 
     return eventHandled;
 }
@@ -471,48 +516,77 @@ bool A1::keyInputEvent(int key, int action, int mods) {
         if ( key == GLFW_KEY_Q ) {
             glfwSetWindowShouldClose(m_window, GL_TRUE);
             eventHandled = true;
-        }
 
-        if ( key == GLFW_KEY_R ) {
-            resetControls();
+        } else if ( key == GLFW_KEY_R ) {
+            reset();
             eventHandled = true;
-        }
 
-        if ( key == GLFW_KEY_BACKSPACE ) {
+        } else if ( key == GLFW_KEY_BACKSPACE ) {
             int h = m_grid.getHeight( m_active_x, m_active_z );
             h = glm::clamp( h-1, 0, (int)MAX_HEIGHT );
             m_grid.setHeight( m_active_x, m_active_z, h );
-
             eventHandled = true;
-        }
 
-        if ( key == GLFW_KEY_SPACE ) {
+        } else if ( key == GLFW_KEY_SPACE ) {
             int h = m_grid.getHeight( m_active_x, m_active_z );
             h = glm::clamp( h+1, 0, (int)MAX_HEIGHT );
             m_grid.setHeight( m_active_x, m_active_z, h );
+            m_grid.setColour( m_active_x, m_active_z, current_col );
+            eventHandled = true;
 
+        } else if ( key == GLFW_KEY_UP ) {
+            int new_z = glm::clamp( m_active_z-1, 0, (int)(DIM-1) );
+
+            if ( m_active_z != new_z && (mods & GLFW_MOD_SHIFT) ) {
+                int h = m_grid.getHeight( m_active_x, m_active_z );
+                int c = m_grid.getColour( m_active_x, m_active_z );
+                m_grid.setHeight( m_active_x, new_z, h);
+                m_grid.setColour( m_active_x, new_z, c);
+            }
+
+            m_active_z = new_z;
+            eventHandled = true;
+
+        } else if ( key == GLFW_KEY_DOWN ) {
+            int new_z = glm::clamp( m_active_z+1, 0, (int)(DIM-1) );
+
+            if ( m_active_z != new_z && (mods & GLFW_MOD_SHIFT) ) {
+                int h = m_grid.getHeight( m_active_x, m_active_z );
+                int c = m_grid.getColour( m_active_x, m_active_z );
+                m_grid.setHeight( m_active_x, new_z, h);
+                m_grid.setColour( m_active_x, new_z, c);
+            }
+
+            m_active_z = new_z;
+            eventHandled = true;
+
+        } else if ( key == GLFW_KEY_LEFT ) {
+            int new_x = glm::clamp( m_active_x-1, 0, (int)(DIM-1) );
+
+            if ( m_active_x != new_x && (mods & GLFW_MOD_SHIFT) ) {
+                int h = m_grid.getHeight( m_active_x, m_active_z );
+                int c = m_grid.getColour( m_active_x, m_active_z );
+                m_grid.setHeight( new_x, m_active_z, h);
+                m_grid.setColour( new_x, m_active_z, c);
+            }
+
+            m_active_x = new_x;
+            eventHandled = true;
+
+        } else if ( key == GLFW_KEY_RIGHT ) {
+            int new_x = glm::clamp( m_active_x+1, 0, (int)(DIM-1) );
+
+            if ( m_active_x != new_x && (mods & GLFW_MOD_SHIFT) ) {
+                int h = m_grid.getHeight( m_active_x, m_active_z );
+                int c = m_grid.getColour( m_active_x, m_active_z );
+                m_grid.setHeight( new_x, m_active_z, h);
+                m_grid.setColour( new_x, m_active_z, c);
+            }
+
+            m_active_x = new_x;
             eventHandled = true;
         }
 
-        if ( key == GLFW_KEY_UP ) {
-            m_active_z = glm::clamp( m_active_z-1, 0, (int)(DIM-1) );
-            eventHandled = true;
-        }
-
-        if ( key == GLFW_KEY_DOWN ) {
-            m_active_z = glm::clamp( m_active_z+1, 0, (int)(DIM-1) );
-            eventHandled = true;
-        }
-
-        if ( key == GLFW_KEY_LEFT ) {
-            m_active_x = glm::clamp( m_active_x-1, 0, (int)(DIM-1) );
-            eventHandled = true;
-        }
-
-        if ( key == GLFW_KEY_RIGHT ) {
-            m_active_x = glm::clamp( m_active_x+1, 0, (int)(DIM-1) );
-            eventHandled = true;
-        }
     }
 
     return eventHandled;
@@ -524,7 +598,31 @@ bool A1::keyInputEvent(int key, int action, int mods) {
  * Reset View, move active block back to (0,0)
  */
 
-void A1::resetControls() {
+void A1::reset() {
     m_active_x = 0;
     m_active_z = 0;
+
+    m_rot_angle = 0;
+    m_scale = 1;
+
+    current_col = 0;
+    static const float default_colours[] = {
+        0.0f, 0.0f, 1.0f,
+        0.0f, 0.4f, 1.0f,
+        0.4f, 0.2f, 1.0f,
+        0.6f, 0.0f, 1.0f,
+
+        1.0f, 1.0f, 0.0f,
+        1.0f, 0.8f, 0.6f,
+        1.0f, 0.6f, 0.2f,
+        1.0f, 0.4f, 1.4f,
+    };
+    memcpy(colour, default_colours, sizeof(default_colours));
+
+    for ( int x = 0; x < DIM; x++ ) {
+        for ( int z = 0; z < DIM; z++ ) {
+            m_grid.setHeight( x, z, 0 );
+            m_grid.setColour( x, z, 0 );
+        }
+    }
 }

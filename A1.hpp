@@ -29,7 +29,7 @@ protected:
 
 private:
     void initGrid();
-    void resetControls();
+    void reset();
 
     // Fields related to the shader and uniforms.
     ShaderProgram m_shader;
@@ -69,6 +69,6 @@ private:
     int m_active_z;
 
 
-    float colour[3];
+    float *colour;
     int current_col;
 };
