@@ -239,11 +239,12 @@ void A1::guiLogic()
     float opacity(0.5f);
 
     ImGui::Begin("Debug Window", &showDebugWindow, ImVec2(100,100), opacity, windowFlags);
+
         if( ImGui::Button( "Quit Application" ) ) {
             glfwSetWindowShouldClose(m_window, GL_TRUE);
         }
 
-        if( ImGui::Button( "Reset Controls" ) ) {
+        if( ImGui::Button( "Reset" ) ) {
             reset();
         }
 
@@ -529,9 +530,14 @@ bool A1::keyInputEvent(int key, int action, int mods) {
 
         } else if ( key == GLFW_KEY_SPACE ) {
             int h = m_grid.getHeight( m_active_x, m_active_z );
+            int c = m_grid.getColour( m_active_x, m_active_z );
+            if ( h == 0 ) {
+                c = current_col;
+            }
+
             h = glm::clamp( h+1, 0, (int)MAX_HEIGHT );
             m_grid.setHeight( m_active_x, m_active_z, h );
-            m_grid.setColour( m_active_x, m_active_z, current_col );
+            m_grid.setColour( m_active_x, m_active_z, c );
             eventHandled = true;
 
         } else if ( key == GLFW_KEY_UP ) {

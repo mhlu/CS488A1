@@ -1,0 +1,18 @@
+Compilation:
+    - no changes from default
+
+premake4 clean
+premake4 gmake
+make
+
+Manual:
+    I interpreted the colour of new blocks as below:
+
+    When adding colour on a cell with at least one block,
+    I use the current colour of the blocks on the cell. When
+    adding colour on a cell with no blocks, I use the colour
+    selected by radio button. This means, if the radio selected
+    colour is RED, and I'm on a cell with BLUE blocks, pressing
+    SPACE will add a BLUE block, but if you keep pressing BACKSPACE
+    until there are no more blocks left on the cell, then you press
+    SPACE, it will add a RED( not BLUE ).
